@@ -12,7 +12,9 @@ import com.activeandroid.Model;
 import com.activeandroid.annotation.Column;
 import com.activeandroid.annotation.Table;
 import com.activeandroid.query.Select;
+import com.eveningoutpost.dexdrip.Home;
 import com.eveningoutpost.dexdrip.Models.BgReading;
+import com.getpebble.android.kit.PebbleKit;
 
 import java.util.List;
 
@@ -33,6 +35,10 @@ public class BgSendQueue extends Model {
 
     @Column(name = "operation_type")
     public String operation_type;
+
+    private static Context mContext = Home.getContext();
+
+    private static PebbleSync pebbleSync = new PebbleSync(mContext);
 
     public static BgSendQueue nextBgJob() {
         return new Select()
@@ -57,7 +63,7 @@ public class BgSendQueue extends Model {
                 .where("mongo_success = ?", false)
                 .where("operation_type = ?", "create")
                 .orderBy("_ID asc")
-                .limit(30)
+                .limit(10)
                 .execute();
     }
 
@@ -67,16 +73,16 @@ public class BgSendQueue extends Model {
         bgSendQueue.bgReading = bgReading;
         bgSendQueue.success = false;
         bgSendQueue.mongo_success = false;
+
         bgSendQueue.save();
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-
         Intent updateIntent = new Intent(Intents.ACTION_NEW_BG_ESTIMATE_NO_DATA);
         context.sendBroadcast(updateIntent);
 
         if (prefs.getBoolean("cloud_storage_mongodb_enable", false) || prefs.getBoolean("cloud_storage_api_enable", false)) {
             Log.w("SENSOR QUEUE:", String.valueOf(bgSendQueue.mongo_success));
-            if (operation_type.compareTo("create") == 0) {
+            if (operation_type == "create") {
                 MongoSendTask task = new MongoSendTask(context, bgSendQueue);
                 task.execute();
             }
@@ -97,7 +103,6 @@ public class BgSendQueue extends Model {
         }
 
         if(prefs.getBoolean("broadcast_to_pebble", false)) {
-            PebbleSync pebbleSync = new PebbleSync();
             pebbleSync.sendData(context, bgReading);
         }
     }
